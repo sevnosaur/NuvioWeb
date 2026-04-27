@@ -8,7 +8,6 @@ import postcss from 'postcss';
 import cssnano from 'cssnano';
 import autoprefixer from 'autoprefixer';
 import postcssCustomProperties from 'postcss-custom-properties';
-import esbuildBabel from '@chialab/esbuild-plugin-babel';
 import { readAppMetadata, syncVersionFiles } from "./appMetadata.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,7 +33,7 @@ const defaultEnvFileContents = `(function defineNuvioEnv() {
 `;
 
 async function buildCSS() {
-  console.log("processing CSS with PostCSS (legacy upport)...");
+  console.log("processing CSS with PostCSS...");
   const cssDir = path.join(rootDir, "css");
   const files = await readdir(cssDir);
   const cssFiles = files.filter(f => f.endsWith(".css"));
@@ -46,7 +45,7 @@ async function buildCSS() {
     const css = await readFile(cssPath, 'utf8');
     const result = await postcss([
       postcssGlobalData({ files: [path.join(cssDir, "base.css")] }),
-      postcssCustomProperties({ preserve: false }), 
+      postcssCustomProperties({ preserve: false }),
       autoprefixer({ overrideBrowserslist: ['Chrome 38'], grid: "autoplace" }),
       cssnano()
     ]).process(css, { from: cssPath, to: outPath });
@@ -62,26 +61,33 @@ async function copyOptionalRootFile(fileName, { fallback = null, defaultContents
     await cp(path.join(rootDir, fileName), targetPath);
     return fileName;
   } catch (error) {
-    if (error?.code !== "ENOENT") {
-      throw error;
-    }
+    if (error?.code !== "ENOENT") throw error;
   }
 
-  if (!fallback) {
-    return "";
-  }
+  if (!fallback) return "";
 
   try {
     await cp(path.join(rootDir, fallback), targetPath);
     return fallback;
   } catch (error) {
-    if (error?.code !== "ENOENT") {
-      throw error;
-    }
+    if (error?.code !== "ENOENT") throw error;
   }
 
   await writeFile(targetPath, defaultContents, "utf8");
   return "generated-default";
+}
+
+async function safeCopyDir(src, dest) {
+  try {
+    await mkdir(dest, { recursive: true });
+    await cp(src, dest, { recursive: true, force: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      console.warn(`WARNING: skipping copy, source not found: ${src}`);
+    } else {
+      throw error;
+    }
+  }
 }
 
 async function buildBundle() {
@@ -90,13 +96,12 @@ async function buildBundle() {
   console.log("starting bundle build...");
   await mkdir(cacheDir, { recursive: true });
 
-  // create a temporary bundle for babel to process
   await build({
     entryPoints: [path.join(rootDir, "js/app.js")],
     outfile: tempBundlePath,
     bundle: true,
     format: "iife",
-    target: ["es2015"], 
+    target: ["es2015"],
     define: { "process.env.NODE_ENV": '"production"', __NUVIO_APP_VERSION__: JSON.stringify(version) }
   });
 
@@ -106,12 +111,11 @@ async function buildBundle() {
     presets: [
       ["@babel/preset-env", {
         targets: "chrome 38",
-        useBuiltIns: "entry", 
+        useBuiltIns: "entry",
         corejs: 3,
       }]
     ],
     plugins: [
-      // babel plugins
       "@babel/plugin-transform-runtime",
       "@babel/plugin-transform-optional-chaining",
       "@babel/plugin-transform-nullish-coalescing-operator"
@@ -120,11 +124,8 @@ async function buildBundle() {
     minified: true
   });
 
-  // save result back to the temporary bundle file (which will be the input for esbuild)
   await writeFile(tempBundlePath, babelResult.code, "utf8");
 
-  // flattening
-  // babel introduces some helper functions that are not tree-shakeable, so we need to bundle again with esbuild to flatten everything into a single file and remove any remaining unused code
   console.log("finalizing bundle with esbuild...");
   await build({
     entryPoints: [tempBundlePath],
@@ -142,34 +143,31 @@ async function buildBundle() {
   });
 
   await cp(path.join(distDir, bundleFileName), path.join(rootDir, bundleFileName));
-  await rm(tempBundlePath).catch(() => { });
+  await rm(tempBundlePath).catch(() => {});
   console.log("bundle build complete");
 }
+
 async function runBuild() {
   try {
     console.log("cleaning dist directory...");
     await rm(distDir, { recursive: true, force: true });
     await mkdir(distDir, { recursive: true });
-    
+
     console.log("building version files...");
     await syncVersionFiles();
     await buildCSS();
 
     console.log("copying static assets...");
     const copiedAppInfoSource = await copyOptionalRootFile("appinfo.json");
-    await mkdir(path.join(distDir, "assets"), { recursive: true });
-await mkdir(path.join(distDir, "res"), { recursive: true });
-await Promise.all([
-  cp(path.join(rootDir, "assets"), path.join(distDir, "assets"), { recursive: true, force: true, mode: 0 }),
-  cp(path.join(rootDir, "res"), path.join(distDir, "res"), { recursive: true, force: true, mode: 0 }).catch(() => {}),
-  cp(path.join(rootDir, "docs", "youtube-proxy.html"), path.join(distDir, "youtube-proxy.html"))
-]);
+
+    await safeCopyDir(path.join(rootDir, "assets"), path.join(distDir, "assets"));
+    await safeCopyDir(path.join(rootDir, "res"), path.join(distDir, "res"));
+    await cp(path.join(rootDir, "docs", "youtube-proxy.html"), path.join(distDir, "youtube-proxy.html")).catch(() => {});
 
     if (!copiedAppInfoSource) {
       console.warn("WARNING: skipping appinfo.json because it is not present in the repo root.");
     }
 
-    // js bundle processing (final step to ensure all transformations are applied correctly and we end up with a single, minified bundle file)
     await buildBundle();
 
     const sourceIndex = await readFile(path.join(rootDir, "index.html"), "utf8");
@@ -190,9 +188,8 @@ await Promise.all([
   } catch (error) {
     console.error("\nbuild failed:");
     console.error(error);
-    process.exit(1); 
+    process.exit(1);
   }
 }
 
-runBuild();
 runBuild();
