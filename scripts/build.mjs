@@ -158,10 +158,10 @@ async function runBuild() {
     console.log("copying static assets...");
     const copiedAppInfoSource = await copyOptionalRootFile("appinfo.json");
     await Promise.all([
-      cp(path.join(rootDir, "assets"), path.join(distDir, "assets"), { recursive: true }),
-      cp(path.join(rootDir, "res"), path.join(distDir, "res"), { recursive: true }),
-      cp(path.join(rootDir, "docs", "youtube-proxy.html"), path.join(distDir, "youtube-proxy.html"))
-    ]);
+  cp(path.join(rootDir, "assets"), path.join(distDir, "assets"), { recursive: true }),
+  cp(path.join(rootDir, "res"), path.join(distDir, "res"), { recursive: true }).catch(() => {}),
+  cp(path.join(rootDir, "docs", "youtube-proxy.html"), path.join(distDir, "youtube-proxy.html"))
+]);
 
     if (!copiedAppInfoSource) {
       console.warn("WARNING: skipping appinfo.json because it is not present in the repo root.");
