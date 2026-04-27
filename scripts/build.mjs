@@ -160,8 +160,8 @@ async function runBuild() {
     await mkdir(path.join(distDir, "assets"), { recursive: true });
 await mkdir(path.join(distDir, "res"), { recursive: true });
 await Promise.all([
-  cp(path.join(rootDir, "assets"), path.join(distDir, "assets"), { recursive: true, force: true }),
-  cp(path.join(rootDir, "res"), path.join(distDir, "res"), { recursive: true, force: true }).catch(() => {}),
+  cp(path.join(rootDir, "assets"), path.join(distDir, "assets"), { recursive: true, force: true, mode: 0 }),
+  cp(path.join(rootDir, "res"), path.join(distDir, "res"), { recursive: true, force: true, mode: 0 }).catch(() => {}),
   cp(path.join(rootDir, "docs", "youtube-proxy.html"), path.join(distDir, "youtube-proxy.html"))
 ]);
 
