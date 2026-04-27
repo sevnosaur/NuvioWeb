@@ -158,7 +158,7 @@ async function runBuild() {
     console.log("copying static assets...");
     const copiedAppInfoSource = await copyOptionalRootFile("appinfo.json");
     await Promise.all([
-  cp(path.join(rootDir, "assets"), path.join(distDir, "assets"), { recursive: true }),
+  cp(path.join(rootDir, "assets"), path.join(distDir, "assets"), { recursive: true, force: true }),
   cp(path.join(rootDir, "res"), path.join(distDir, "res"), { recursive: true }).catch(() => {}),
   cp(path.join(rootDir, "docs", "youtube-proxy.html"), path.join(distDir, "youtube-proxy.html"))
 ]);
